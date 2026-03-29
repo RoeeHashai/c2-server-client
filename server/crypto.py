@@ -7,10 +7,10 @@ from cryptography.hazmat.primitives import hashes
 
 # symmetric encryption
 from cryptography.hazmat.primitives.ciphers.aead import AESCCM
-
+from tcp import Tcp
 import os
 import logging
-
+from tcp import Tcp
 class Security:
     def __init__(self):
         self.private_key = rsa.generate_private_key(
@@ -29,9 +29,9 @@ class Security:
         
     def handshake(self, cid, conn):
         # send the pk
-        conn.sendall(self.get_public_key())
+        Tcp.send(conn, self.get_public_key())
         # get symmetric key from client
-        ciphertext_key = conn.recv(512) # should be enough for a 256 bit key
+        ciphertext_key = Tcp.recive(conn)
         if not ciphertext_key:
             raise Exception("No data received during handshake")
         key = self.private_key.decrypt(

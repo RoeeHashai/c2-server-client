@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives import hashes
 # symmetric encryption
 from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
+from tcp import Tcp
 import os
 
 class Security:
@@ -16,7 +17,7 @@ class Security:
         self.symmetric_key = None
         
     def handshake(self,conn):
-        pk = conn.recv(1024)
+        pk = Tcp.recive(conn)
         if not pk:
             raise Exception("No data received during handshake")
         self.public_key = serialization.load_pem_public_key(pk, backend=default_backend())
@@ -29,16 +30,16 @@ class Security:
                 label=None
             )
         )
-        conn.sendall(ciphertext_key)
+        Tcp.send(conn, ciphertext_key)
         self.symmetric_key = AESCCM(key)
         
     def encrypt(self, plaintext):
         IV = os.urandom(13)
-        ciphertext = self.symmetric_key.encrypt(IV, plaintext, None)
+        ciphertext = self.symmetric_key.encrypt(IV, plaintext.encode(), None)
         return IV + ciphertext
     
     def decrypt(self, ciphertext):
         IV = ciphertext[:13]
         plaintext = self.symmetric_key.decrypt(IV, ciphertext[13:], None)
-        return plaintext
+        return plaintext.decode()
  

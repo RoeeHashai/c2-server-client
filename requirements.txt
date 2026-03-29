@@ -1,0 +1,5 @@
+cffi==2.0.0
+cryptography==46.0.6
+dnspython==2.8.0
+pycparser==3.0
+pymongo==4.16.0

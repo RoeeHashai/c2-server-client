@@ -1,6 +1,8 @@
 import sqlite3
 import logging
 from datetime import datetime
+
+# for checkers: got this class blueprint with the help of Gemini.
 class DBLogger(logging.Handler):
     def __init__(self, db_path='c2_logs.db'):
         super().__init__()
@@ -15,6 +17,7 @@ class DBLogger(logging.Handler):
                 )
             ''')
             conn.commit()
+
     def emit(self, record):
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()

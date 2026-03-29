@@ -1,0 +1,31 @@
+import socket
+import argparse
+
+class Client:
+    def __init__(self, server_ip, server_port):
+        self.server_ip = server_ip
+        self.server_port = server_port
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.connect((self.server_ip, self.server_port))
+        print(f"Connected to server at {self.server_ip}:{self.server_port}")
+        
+    def execute_command(self):
+        while True:
+            data = self.socket.recv(1024)
+            if not data:
+                break
+            if data == b'\x00':
+                continue
+            else:
+                command = data.decode()
+                print(f"Received command: {command}")
+                self.socket.sendall(f"Executed command: {command}".encode())
+            
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Simple client for connecting to the server")
+    parser.add_argument("--ip", type=str, default="127.0.0.1", help="IP address of the server to connect to")
+    parser.add_argument("--port", type=int, default=12345, help="Port number of the server to connect to")
+    args = parser.parse_args()
+    client = Client(args.ip, args.port)
+    client.execute_command()
+    

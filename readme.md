@@ -154,7 +154,7 @@ Received command: pwd
 /Users/roeehashai/projects/c2-server-client
 ```
 
-## Loggin
+### Logging
 ```
 2026-03-29 20:11:09,569 [INFO] New connection accepted in address 127.0.0.1:52402
 2026-03-29 20:11:13,398 [INFO] New connection accepted in address 127.0.0.1:52403

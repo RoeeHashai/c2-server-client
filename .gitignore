@@ -1,6 +1,8 @@
 DS_Store
-simple_output.log
+logfile.log
 venv/
 
 client/__pycache__/
 server/__pycache__/
+
+c2_logs.db

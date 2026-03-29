@@ -6,13 +6,14 @@ import itertools
 import time
 from concurrent.futures import ThreadPoolExecutor
 from crypto import Security
+from logger import DBLogger
 
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler("simple_output.log"),
-        # logging.StreamHandler()
+        logging.FileHandler("logfile.log"),
+        DBLogger()
     ]
 )
 
@@ -115,11 +116,14 @@ class Server:
                 conn.sendall(self.security.encrypt(client_id, command))
                 data = conn.recv(1024)
                 if data:
-                    logging.info(f"Received data from client {cid}: {self.security.decrypt(cid, data)}")
+                    plaintext = self.security.decrypt(cid, data)
+                    logging.info(f"Received data from client {cid}: {plaintext}")
                 # self.kill(cid) - should kill after every command?
             except (BrokenPipeError, ConnectionResetError) as e:
-                logging.warning(f"Error occurred while processing client {cid}: {e}, killing client")
+                logging.warning(f"Error in connection occurred while processing client {cid}: {e}, killing client")
                 self.kill(cid)
+            except Exception as e:
+                logging.warning(f"Error occurred while processing client {cid}: {e}")
                 
         with self.act_client_lock:
             if client_id in self.active_clients:

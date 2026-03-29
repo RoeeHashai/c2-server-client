@@ -1,25 +1,31 @@
 import socket
 import argparse
+from crypto import Security
 
 class Client:
     def __init__(self, server_ip, server_port):
         self.server_ip = server_ip
         self.server_port = server_port
+        self.security = Security()
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((self.server_ip, self.server_port))
         print(f"Connected to server at {self.server_ip}:{self.server_port}")
+        try:
+            self.security.handshake(self.socket)
+        except Exception as e:
+            print(f"Failed handshake with: {e}")
         
     def execute_command(self):
         while True:
             data = self.socket.recv(1024)
             if not data:
                 break
-            if data == b'\x00':
-                continue
-            else:
-                command = data.decode()
+            data = data.replace(b'\x00', b'') 
+            if data:
+                command = self.security.decrypt(data).decode()
                 print(f"Received command: {command}")
-                self.socket.sendall(f"Executed command: {command}".encode())
+                ciphertext = self.security.encrypt(f"Executed command: {command}".encode())
+                self.socket.sendall(ciphertext)
             
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Simple client for connecting to the server")

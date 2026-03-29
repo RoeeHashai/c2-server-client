@@ -1,0 +1,44 @@
+# asymmetric encryption
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes
+
+# symmetric encryption
+from cryptography.hazmat.primitives.ciphers.aead import AESCCM
+
+import os
+
+class Security:
+    def __init__(self):
+        self.public_key = None
+        self.symmetric_key = None
+        
+    def handshake(self,conn):
+        pk = conn.recv(1024)
+        if not pk:
+            raise Exception("No data received during handshake")
+        self.public_key = serialization.load_pem_public_key(pk, backend=default_backend())
+        key = AESCCM.generate_key(bit_length=256)
+        ciphertext_key = self.public_key.encrypt(
+            key,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        conn.sendall(ciphertext_key)
+        self.symmetric_key = AESCCM(key)
+        
+    def encrypt(self, plaintext):
+        IV = os.urandom(13)
+        ciphertext = self.symmetric_key.encrypt(IV, plaintext, None)
+        return IV + ciphertext
+    
+    def decrypt(self, ciphertext):
+        IV = ciphertext[:13]
+        plaintext = self.symmetric_key.decrypt(IV, ciphertext[13:], None)
+        return plaintext
+ 

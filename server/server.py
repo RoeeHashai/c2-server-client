@@ -5,6 +5,7 @@ import socket
 import itertools
 import time
 from concurrent.futures import ThreadPoolExecutor
+from crypto import Security
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -22,7 +23,7 @@ class Server:
                             "display" : (self.display, "Displays active clients, usage: display", 0),
                             "send" : (self.send, "Sends a command to a client, usage: send <client_id> <command>", 2),
                             "kill" : (self.kill, "Kills a client, usage: kill <client_id>", 1),
-                            "info" : (self.info, "Displays information about the server, usage: info", 0) }
+                            "info" : (self.info, "Displays information about the server, usage: info", 0)}
         self.is_running = True
         self.ip = ip
         self.port = port
@@ -34,6 +35,7 @@ class Server:
         self.socket.settimeout(1.0) 
         self.client_id_counter = itertools.count(1)
         self.pool = ThreadPoolExecutor(max_workers=10)
+        self.security = Security()
         # should we enable here tcp keep alive? 
         
     def listen(self):
@@ -46,6 +48,12 @@ class Server:
                 next_id = next(self.client_id_counter)
                 with self.act_client_lock:
                     self.active_clients[str(next_id)] = (conn, addr)
+                # need to create a session key with the new client
+                try:
+                    self.security.handshake(str(next_id), conn)
+                except Exception as e:
+                    logging.warning(f"Error occurred during handshake with client {next_id}: {e}")  
+                    self.kill(str(next_id))
             except socket.timeout:
                 continue
         
@@ -66,10 +74,8 @@ class Server:
                     
         
     def run(self):
-        listen_thread = threading.Thread(target=self.listen, daemon=True)
-        heartbeat_thread = threading.Thread(target=self.heartbeat, daemon=True)
-        listen_thread.start()
-        heartbeat_thread.start()
+        threading.Thread(target=self.listen, daemon=True).start()
+        threading.Thread(target=self.heartbeat, daemon=True).start()
         while self.is_running:
             raw_cmd = input("cli> ")
             if raw_cmd:
@@ -106,10 +112,10 @@ class Server:
         def process(self, cid, conn, command):
             try:
                 logging.info(f"Sending command to client {client_id}: {command}")
-                conn.sendall(command.encode())
+                conn.sendall(self.security.encrypt(client_id, command))
                 data = conn.recv(1024)
                 if data:
-                    logging.info(f"Received data from client {cid}: {data.decode()}")
+                    logging.info(f"Received data from client {cid}: {self.security.decrypt(cid, data)}")
                 # self.kill(cid) - should kill after every command?
             except (BrokenPipeError, ConnectionResetError) as e:
                 logging.warning(f"Error occurred while processing client {cid}: {e}, killing client")
@@ -128,6 +134,7 @@ class Server:
             if client_id in self.active_clients:
                 conn, addr = self.active_clients.pop(client_id)
                 conn.close()
+                self.security.remove_client(client_id)
                 logging.info(f"Killed client {client_id} at address {addr[0]}:{addr[1]}")
             else:
                 print(f"No client with ID {client_id} found.")

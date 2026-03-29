@@ -38,10 +38,8 @@ class Server:
         self.client_id_counter = itertools.count(1)
         self.pool = ThreadPoolExecutor(max_workers=10)
         self.security = Security()
-        # should we enable here tcp keep alive? 
         
     def listen(self):
-        # print(f"Server listening on {self.ip}:{self.port}")
         while self.is_running:
             try:
                 conn, addr = self.socket.accept()
@@ -50,7 +48,6 @@ class Server:
                 next_id = next(self.client_id_counter)
                 with self.act_client_lock:
                     self.active_clients[str(next_id)] = (conn, addr)
-                # need to create a session key with the new client
                 try:
                     self.security.handshake(str(next_id), conn)
                 except Exception as e:
@@ -81,14 +78,12 @@ class Server:
             if raw_cmd:
                 tokens = raw_cmd.strip().split(maxsplit=2)
                 cmd, args = tokens[0], tokens[1:]
-                # logging.debug(f"Received command: {cmd} with arguments: {args}")
                 if cmd in self.__commands and len(args) == self.__commands[cmd][2]:
                     fun = self.__commands[cmd][0]
                     fun(*args)
                 else:
                     print(f"Invalid command or incorrect number of arguments. Type 'help' for a list of commands.")
                     logging.warning(f"Invalid command or incorrect number of arguments. Type 'help' for a list of commands.")
-        # Cleanup
         self.pool.shutdown(True)
         self.socket.close()
                     
@@ -120,7 +115,6 @@ class Server:
                 if data:
                     plaintext = self.security.decrypt(cid, data)
                     logging.info(f"Received data from client {cid}: {plaintext}")
-                # self.kill(cid) - should kill after every command?
             except (BrokenPipeError, ConnectionResetError) as e:
                 logging.warning(f"Error in connection occurred while processing client {cid}: {e}, killing client")
                 self.kill(cid)

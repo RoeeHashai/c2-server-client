@@ -5,9 +5,9 @@ import socket
 import itertools
 import time
 from concurrent.futures import ThreadPoolExecutor
-from crypto import Security
-from logger import DBLogger
-from tcp import Tcp
+from server.crypto import Security
+from server.logger import DBLogger
+from network.tcp import Tcp
 
 logging.basicConfig(
     level=logging.DEBUG,

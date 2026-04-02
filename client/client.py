@@ -1,9 +1,9 @@
 import socket
 import argparse
-from crypto import Security
+from client.crypto import Security
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
-from tcp import Tcp
+from network.tcp import Tcp
 class Client:
     def __init__(self, server_ip, server_port):
         self.server_ip = server_ip

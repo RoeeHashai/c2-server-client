@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives import hashes
 # symmetric encryption
 from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
-from tcp import Tcp
+from network.tcp import Tcp
 import os
 
 class Security:

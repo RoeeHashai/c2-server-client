@@ -71,8 +71,10 @@ class Server:
                         conn.close()
                             
     def run(self):
-        threading.Thread(target=self.listen, daemon=True).start()
-        threading.Thread(target=self.heartbeat, daemon=True).start()
+        listener_thread = threading.Thread(target=self.listen, daemon=True)
+        heartbeat_thread = threading.Thread(target=self.heartbeat, daemon=True)
+        listener_thread.start()
+        heartbeat_thread.start()
         while self.is_running:
             raw_cmd = input("cli> ")
             if raw_cmd:
@@ -84,6 +86,8 @@ class Server:
                 else:
                     print(f"Invalid command or incorrect number of arguments. Type 'help' for a list of commands.")
                     logging.warning(f"Invalid command or incorrect number of arguments. Type 'help' for a list of commands.")
+        listener_thread.join()
+        heartbeat_thread.join()
         self.pool.shutdown(True)
         self.socket.close()
                     

@@ -20,40 +20,44 @@ logging.basicConfig(
 
 class Server:
     def __init__(self, ip, port):
+        # public members
+        self.is_running = True
+        self.ip = ip
+        self.port = port
+        
+        # private members
         self.__commands = { "help" : (self.help, "Displays a help message, usage: help", 0),
                             "exit" : (self.exit, "Exits the server, usage: exit", 0),
                             "clients" : (self.clients, "Displays active clients, usage: clients", 0),
                             "send" : (self.send, "Sends a command to a client, usage: send <client_id> <command>", 2),
                             "kill" : (self.kill, "Kills a client, usage: kill <client_id>", 1),
                             "info" : (self.info, "Displays information about the server, usage: info", 0)}
-        self.is_running = True
-        self.ip = ip
-        self.port = port
-        self.active_clients = {} # { client_id : (conn, client_address)}
-        self.act_client_lock = threading.Lock()
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.bind((self.ip, self.port))
-        self.socket.listen()
-        self.socket.settimeout(1.0) 
-        self.client_id_counter = itertools.count(1)
-        self.pool = ThreadPoolExecutor(max_workers=10)
-        self.security = Security()
-        self.listener_thread = threading.Thread(target=self.listen)
-        self.heartbeat_thread = threading.Thread(target=self.heartbeat)
-        self.listener_thread.start()
-        self.heartbeat_thread.start()
+
+        self.__active_clients = {} # { client_id : (conn, client_address)}
+        self.__act_client_lock = threading.Lock()
+        self.__server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.__server_socket.bind((self.ip, self.port))
+        self.__server_socket.listen()
+        self.__server_socket.settimeout(1.0) 
+        self.__client_id_counter = itertools.count(1)
+        self.__pool = ThreadPoolExecutor(max_workers=10)
+        self.__security = Security()
+        self.__listener_thread = threading.Thread(target=self.listen)
+        self.__heartbeat_thread = threading.Thread(target=self.heartbeat)
+        self.__listener_thread.start()
+        self.__heartbeat_thread.start()
         
     def listen(self):
         while self.is_running:
             try:
-                conn, addr = self.socket.accept()
+                conn, addr = self.__server_socket.accept()
                 conn.settimeout(None)
                 logging.info(f"New connection accepted in address {addr[0]}:{addr[1]}")
-                next_id = next(self.client_id_counter)
-                with self.act_client_lock:
-                    self.active_clients[str(next_id)] = (conn, addr)
+                next_id = next(self.__client_id_counter)
+                with self.__act_client_lock:
+                    self.__active_clients[str(next_id)] = (conn, addr)
                 try:
-                    self.security.handshake(str(next_id), conn)
+                    self.__security.handshake(str(next_id), conn)
                 except Exception as e:
                     logging.warning(f"Error occurred during handshake with client {next_id}: {e}")  
                     self.kill(str(next_id))
@@ -63,15 +67,15 @@ class Server:
     def heartbeat(self):
         while self.is_running:
             time.sleep(1)
-            with self.act_client_lock:
-                client_ids = list(self.active_clients.keys())
+            with self.__act_client_lock:
+                client_ids = list(self.__active_clients.keys())
                 for cid in client_ids:
                     try:
-                        conn = self.active_clients[cid][0]
+                        conn = self.__active_clients[cid][0]
                         Tcp.send_heartbeat(conn)
                     except:
                         logging.info(f"Client {cid} is not here, cleaning")
-                        self.active_clients.pop(cid, None)
+                        self.__active_clients.pop(cid, None)
                         conn.close()
 
     def run(self):
@@ -88,10 +92,10 @@ class Server:
                     logging.warning(f"Invalid command or incorrect number of arguments. Type 'help' for a list of commands.")
                     
     def shutdown(self):
-        self.listener_thread.join()
-        self.heartbeat_thread.join()
-        self.pool.shutdown(True)
-        self.socket.close()
+        self.__listener_thread.join()
+        self.__heartbeat_thread.join()
+        self.__pool.shutdown(True)
+        self.__server_socket.close()
                     
     def help(self):
         for cmd, (_, desc, _) in self.__commands.items():
@@ -100,26 +104,26 @@ class Server:
     def exit(self):
         self.is_running = False
         logging.info("Exiting server...")
-        for cid in list(self.active_clients.keys()):
+        for cid in list(self.__active_clients.keys()):
             self.kill(cid)
         
     def clients(self):
-        with self.act_client_lock:
-            if not self.active_clients:
+        with self.__act_client_lock:
+            if not self.__active_clients:
                 print("No active clients.")
             else:
-                for cid, (conn, addr) in self.active_clients.items():
+                for cid, (conn, addr) in self.__active_clients.items():
                     print(f"Client ID: {cid}, Address: {addr[0]}:{addr[1]}")
         
     def send(self, client_id, command):
         def process(self, cid, conn, command):
             try:
                 logging.info(f"Sending command to client {client_id}: {command}")
-                ciphertext = self.security.encrypt(cid, command)
+                ciphertext = self.__security.encrypt(cid, command)
                 Tcp.send(conn, ciphertext)
                 data = Tcp.recive(conn)
                 if data:
-                    plaintext = self.security.decrypt(cid, data)
+                    plaintext = self.__security.decrypt(cid, data)
                     logging.info(f"Received data from client {cid}: {plaintext}")
             except (BrokenPipeError, ConnectionResetError) as e:
                 logging.warning(f"Error in connection occurred while processing client {cid}: {e}, killing client")
@@ -127,20 +131,20 @@ class Server:
             except Exception as e:
                 logging.warning(f"Error occurred while processing client {cid}: {e}")
                 
-        with self.act_client_lock:
-            if client_id in self.active_clients:
-                conn = self.active_clients[client_id][0]
-                self.pool.submit(process, self, client_id, conn, command)
+        with self.__act_client_lock:
+            if client_id in self.__active_clients:
+                conn = self.__active_clients[client_id][0]
+                self.__pool.submit(process, self, client_id, conn, command)
             else:
                 print("Non existing client")
                 logging.warning(f"Non existing client: {client_id} cannot send command: {command}")
         
     def kill(self, client_id):
-        with self.act_client_lock:
-            if client_id in self.active_clients:
-                conn, addr = self.active_clients.pop(client_id)
+        with self.__act_client_lock:
+            if client_id in self.__active_clients:
+                conn, addr = self.__active_clients.pop(client_id)
                 conn.close()
-                self.security.remove_client(client_id)
+                self.__security.remove_client(client_id)
                 logging.info(f"Killed client {client_id} at address {addr[0]}:{addr[1]}")
             else:
                 print(f"No client with ID {client_id} found.")
@@ -159,4 +163,3 @@ if __name__ == "__main__":
     server = Server(args.ip, args.port)
     server.run()
     server.shutdown()
-    

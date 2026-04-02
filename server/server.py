@@ -64,7 +64,7 @@ class Server:
                 for cid in client_ids:
                     try:
                         conn = self.active_clients[cid][0]
-                        Tcp.send(conn, b'\x00')
+                        Tcp.send_heartbeat(conn)
                     except:
                         logging.info(f"Client {cid} is not here, cleaning")
                         self.active_clients.pop(cid, None)

@@ -4,5 +4,6 @@ venv/
 
 client/__pycache__/
 server/__pycache__/
+network/__pycache__/
 
 c2_logs.db

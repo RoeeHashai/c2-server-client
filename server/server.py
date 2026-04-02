@@ -38,6 +38,10 @@ class Server:
         self.client_id_counter = itertools.count(1)
         self.pool = ThreadPoolExecutor(max_workers=10)
         self.security = Security()
+        self.listener_thread = threading.Thread(target=self.listen)
+        self.heartbeat_thread = threading.Thread(target=self.heartbeat)
+        self.listener_thread.start()
+        self.heartbeat_thread.start()
         
     def listen(self):
         while self.is_running:
@@ -69,12 +73,8 @@ class Server:
                         logging.info(f"Client {cid} is not here, cleaning")
                         self.active_clients.pop(cid, None)
                         conn.close()
-                            
+
     def run(self):
-        listener_thread = threading.Thread(target=self.listen, daemon=True)
-        heartbeat_thread = threading.Thread(target=self.heartbeat, daemon=True)
-        listener_thread.start()
-        heartbeat_thread.start()
         while self.is_running:
             raw_cmd = input("cli> ")
             if raw_cmd:
@@ -86,8 +86,10 @@ class Server:
                 else:
                     print(f"Invalid command or incorrect number of arguments. Type 'help' for a list of commands.")
                     logging.warning(f"Invalid command or incorrect number of arguments. Type 'help' for a list of commands.")
-        listener_thread.join()
-        heartbeat_thread.join()
+                    
+    def shutdown(self):
+        self.listener_thread.join()
+        self.heartbeat_thread.join()
         self.pool.shutdown(True)
         self.socket.close()
                     
@@ -156,4 +158,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     server = Server(args.ip, args.port)
     server.run()
+    server.shutdown()
     

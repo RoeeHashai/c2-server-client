@@ -55,5 +55,3 @@ if __name__ == "__main__":
     client = Client(args.ip, args.port)
     client.start()
     client.shutdown()
-    
-    

@@ -36,15 +36,15 @@ pip install -r requirements.txt
 
 To run the server, use the following command:
 ```
-python3 server/server.py
+python -m server.server
 ```
 This will run the server on "127.0.0.1" and port 12345 by default. You can change the IP and port by passing them as arguments:
 ```
-python3 server/server.py --ip <ip> --port <port>
+python -m server.server --ip <ip> --port <port>
 ```
 Similarly, to run the client, use the following command:
 ```
-python3 client/client.py
+python -m client.client
 ```
 The same flags are relevant here as well.
 

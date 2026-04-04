@@ -31,7 +31,7 @@ class Client:
         except Exception as e:
             print(f"Failed to send data: {e}")
             
-    def start(self):
+    def run(self):
         while True:
             try:
                 data = Tcp.recive(self.__client_socket)
@@ -45,8 +45,9 @@ class Client:
             except Exception as e:
                 print(f"Error occurred: {e}")
                 break
+        self.__shutdown()
                 
-    def shutdown(self):
+    def __shutdown(self):
         self.__client_socket.close()
         self.__pool.shutdown(wait=False)
             
@@ -56,5 +57,4 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=12345, help="Port number of the server to connect to")
     args = parser.parse_args()
     client = Client(args.ip, args.port)
-    client.start()
-    client.shutdown()
+    client.run()

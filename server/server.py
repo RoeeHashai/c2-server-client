@@ -42,10 +42,6 @@ class Server:
         self.__client_id_counter = itertools.count(1)
         self.__pool = ThreadPoolExecutor(max_workers=10)
         self.__security = Security()
-        self.__listener_thread = threading.Thread(target=self.listen)
-        self.__heartbeat_thread = threading.Thread(target=self.heartbeat)
-        self.__listener_thread.start()
-        self.__heartbeat_thread.start()
         
     def listen(self):
         while self.is_running:
@@ -79,6 +75,10 @@ class Server:
                         conn.close()
 
     def run(self):
+        listener_thread = threading.Thread(target=self.listen)
+        heartbeat_thread = threading.Thread(target=self.heartbeat, daemon=True)
+        listener_thread.start()
+        heartbeat_thread.start()
         while self.is_running:
             raw_cmd = input("cli> ")
             if raw_cmd:
@@ -90,13 +90,10 @@ class Server:
                 else:
                     print(f"Invalid command or incorrect number of arguments. Type 'help' for a list of commands.")
                     logging.warning(f"Invalid command or incorrect number of arguments. Type 'help' for a list of commands.")
-                    
-    def shutdown(self):
-        self.__listener_thread.join()
-        self.__heartbeat_thread.join()
+        listener_thread.join()
         self.__pool.shutdown(True)
         self.__server_socket.close()
-                    
+                                    
     def help(self):
         for cmd, (_, desc, _) in self.__commands.items():
             print(f"{cmd}: {desc}")
@@ -104,7 +101,9 @@ class Server:
     def exit(self):
         self.is_running = False
         logging.info("Exiting server...")
-        for cid in list(self.__active_clients.keys()):
+        with self.__act_client_lock:
+            act_clients = list(self.__active_clients.keys())
+        for cid in act_clients:
             self.kill(cid)
         
     def clients(self):
@@ -122,14 +121,18 @@ class Server:
                 ciphertext = self.__security.encrypt(cid, command)
                 Tcp.send(conn, ciphertext)
                 data = Tcp.recive(conn)
-                if data:
-                    plaintext = self.__security.decrypt(cid, data)
-                    logging.info(f"Received data from client {cid}: {plaintext}")
+                if not data:
+                    logging.warning(f"No data received from client {client_id}, killing client")
+                    self.kill(cid)
+                    return
+                plaintext = self.__security.decrypt(cid, data)
+                logging.info(f"Received data from client {cid}: {plaintext}")
             except (BrokenPipeError, ConnectionResetError) as e:
                 logging.warning(f"Error in connection occurred while processing client {cid}: {e}, killing client")
                 self.kill(cid)
             except Exception as e:
                 logging.warning(f"Error occurred while processing client {cid}: {e}")
+                self.kill(cid)
                 
         with self.__act_client_lock:
             if client_id in self.__active_clients:
@@ -162,4 +165,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     server = Server(args.ip, args.port)
     server.run()
-    server.shutdown()

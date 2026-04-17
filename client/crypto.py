@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives import hashes
 # symmetric encryption
 from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
-from network.tcp import Tcp
+from network.tcp import Tcp, ReciveType
 import os
 
 class Security:
@@ -17,8 +17,8 @@ class Security:
         self.__symmetric_key = None
         
     def handshake(self,conn):
-        pk = Tcp.recive(conn)
-        if not pk:
+        status, pk = Tcp.recive(conn)
+        if status == ReciveType.DISCONNECTED:
             raise Exception("No data received during handshake")
         self.__public_key = serialization.load_pem_public_key(pk, backend=default_backend())
         key = AESCCM.generate_key(bit_length=256)

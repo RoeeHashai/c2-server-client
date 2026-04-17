@@ -2,8 +2,7 @@
 logfile.log
 venv/
 
-client/__pycache__/
-server/__pycache__/
-network/__pycache__/
+__pycache__/
+*.pyc
 
 c2_logs.db

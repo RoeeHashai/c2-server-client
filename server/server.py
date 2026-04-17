@@ -7,7 +7,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from server.crypto import Security
 from server.logger import DBLogger
-from network.tcp import Tcp
+from network.tcp import Tcp, ReciveType
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -17,6 +17,13 @@ logging.basicConfig(
         DBLogger()
     ]
 )
+
+class ConnectedClient:
+    def __init__(self, conn, addr):
+        self.conn = conn
+        self.addr = addr
+        self.recv_lock = threading.Lock()
+        self.send_lock = threading.Lock()
 
 class Server:
     def __init__(self, ip, port):
@@ -51,7 +58,7 @@ class Server:
                 logging.info(f"New connection accepted in address {addr[0]}:{addr[1]}")
                 next_id = next(self.__client_id_counter)
                 with self.__act_client_lock:
-                    self.__active_clients[str(next_id)] = (conn, addr)
+                    self.__active_clients[str(next_id)] = ConnectedClient(conn, addr)
                 try:
                     self.__security.handshake(str(next_id), conn)
                 except Exception as e:
@@ -66,13 +73,16 @@ class Server:
             with self.__act_client_lock:
                 client_ids = list(self.__active_clients.keys())
                 for cid in client_ids:
+                    client = self.__active_clients.get(cid)
+                    if client is None:
+                        continue
                     try:
-                        conn = self.__active_clients[cid][0]
-                        Tcp.send_heartbeat(conn)
+                        with client.send_lock:
+                            Tcp.send_heartbeat(client.conn)
                     except:
                         logging.info(f"Client {cid} is not here, cleaning")
                         self.__active_clients.pop(cid, None)
-                        conn.close()
+                        client.conn.close()
 
     def run(self):
         listener_thread = threading.Thread(target=self.listen)
@@ -111,18 +121,21 @@ class Server:
             if not self.__active_clients:
                 print("No active clients.")
             else:
-                for cid, (conn, addr) in self.__active_clients.items():
-                    print(f"Client ID: {cid}, Address: {addr[0]}:{addr[1]}")
+                for cid, client in self.__active_clients.items():
+                    print(f"Client ID: {cid}, Address: {client.addr[0]}:{client.addr[1]}")
         
     def send(self, client_id, command):
-        def process(self, cid, conn, command):
+        def process(self, cid, client, command):
             try:
-                logging.info(f"Sending command to client {client_id}: {command}")
+                logging.info(f"Sending command to client {cid}: {command}")
                 ciphertext = self.__security.encrypt(cid, command)
-                Tcp.send(conn, ciphertext)
-                data = Tcp.recive(conn)
-                if not data:
-                    logging.warning(f"No data received from client {client_id}, killing client")
+                with client.send_lock:
+                    Tcp.send(client.conn, ciphertext)
+                status, data = None, None
+                with client.recv_lock:
+                    status, data = Tcp.recive(client.conn)
+                if status == ReciveType.DISCONNECTED:
+                    logging.warning(f"No data received from client {cid}, killing client")
                     self.kill(cid)
                     return
                 plaintext = self.__security.decrypt(cid, data)
@@ -133,11 +146,11 @@ class Server:
             except Exception as e:
                 logging.warning(f"Error occurred while processing client {cid}: {e}")
                 self.kill(cid)
-                
+
         with self.__act_client_lock:
             if client_id in self.__active_clients:
-                conn = self.__active_clients[client_id][0]
-                self.__pool.submit(process, self, client_id, conn, command)
+                client = self.__active_clients[client_id]
+                self.__pool.submit(process, self, client_id, client, command)
             else:
                 print("Non existing client")
                 logging.warning(f"Non existing client: {client_id} cannot send command: {command}")
@@ -145,10 +158,10 @@ class Server:
     def kill(self, client_id):
         with self.__act_client_lock:
             if client_id in self.__active_clients:
-                conn, addr = self.__active_clients.pop(client_id)
-                conn.close()
+                client = self.__active_clients.pop(client_id)
+                client.conn.close()
                 self.__security.remove_client(client_id)
-                logging.info(f"Killed client {client_id} at address {addr[0]}:{addr[1]}")
+                logging.info(f"Killed client {client_id} at address {client.addr[0]}:{client.addr[1]}")
             else:
                 print(f"No client with ID {client_id} found.")
                 logging.warning(f"No client with ID {client_id} found.")

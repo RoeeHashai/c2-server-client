@@ -3,7 +3,8 @@ import argparse
 from client.crypto import Security
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
-from network.tcp import Tcp
+from network.tcp import Tcp, ReciveType
+import threading
 class Client:
     def __init__(self, server_ip, server_port):
         # public members
@@ -18,6 +19,7 @@ class Client:
             self.__security.handshake(self.__client_socket)
         except Exception as e:
             print(f"Failed handshake with: {e}")
+        self.__send_lock = threading.Lock()
         self.__pool = ThreadPoolExecutor(max_workers=3)
     
     def execute(self, command):
@@ -27,17 +29,18 @@ class Client:
         print(output)
         ciphertext = self.__security.encrypt(output)
         try:
-            Tcp.send(self.__client_socket, ciphertext)
+            with self.__send_lock:
+                Tcp.send(self.__client_socket, ciphertext)
         except Exception as e:
             print(f"Failed to send data: {e}")
             
     def run(self):
         while True:
             try:
-                data = Tcp.recive(self.__client_socket)
-                if not data:
+                status, data = Tcp.recive(self.__client_socket)
+                if status == ReciveType.DISCONNECTED:
                     break
-                elif data == b"\x00":
+                if status == ReciveType.NO_DATA:
                     continue
                 else:
                     command = self.__security.decrypt(data)

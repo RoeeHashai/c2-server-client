@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives import hashes
 
 # symmetric encryption
 from cryptography.hazmat.primitives.ciphers.aead import AESCCM
-from network.tcp import Tcp
+from network.tcp import Tcp, ReciveType
 import os
 import logging
 
@@ -31,8 +31,8 @@ class Security:
         # send the pk
         Tcp.send(conn, self.get_public_key())
         # get symmetric key from client
-        ciphertext_key = Tcp.recive(conn)
-        if not ciphertext_key:
+        status, ciphertext_key = Tcp.recive(conn)
+        if status == ReciveType.DISCONNECTED:
             raise Exception("No data received during handshake")
         key = self.__private_key.decrypt(
             ciphertext_key,

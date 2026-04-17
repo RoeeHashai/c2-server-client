@@ -40,7 +40,7 @@ class Server:
                             "kill" : (self.kill, "Kills a client, usage: kill <client_id>", 1),
                             "info" : (self.info, "Displays information about the server, usage: info", 0)}
 
-        self.__active_clients = {} # { client_id : (conn, client_address)}
+        self.__active_clients = {} # { client_id : ConnectedClient }
         self.__act_client_lock = threading.Lock()
         self.__server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__server_socket.bind((self.ip, self.port))
